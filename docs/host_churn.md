@@ -158,17 +158,22 @@ python -m vidur.host_churn.compare --runs \
 ```
 
 Positional `R01=path` arguments also work. Paths may be run folders or JSONL
-files. The cutoff defaults to the earliest observed removal in a non-baseline
+files. The time used to divide requests defaults to the earliest observed removal in a non-baseline
 run (zero if no summary records a removal); use `--after` to override it.
 Use `--root` for a different discovery root, `--bin-seconds 10` for arrival
-bins, or `--no-plots` for a standard-library-only report.
+intervals, or `--no-plots` for a standard-library-only report.
 
 The report includes completion counts, mean/p95 latency, summed worker wait
-per request, matched pre/post-cutoff comparisons, a common never-interrupted
-cohort, each run's interrupted cohort, and paired restart-versus-ideal results.
-Paired tables only include requests completed in both compared runs. Figures
+per request, comparisons before and after removal using the same requests, requests that
+were not interrupted in any run, and interrupted requests compared with the
+baseline. It also compares retrying from the beginning with resuming completed
+progress. Tables comparing two runs only include requests completed in both. Figures
 use a common cohort completed in every run, and short IDs resolve through the
 run index. Removing interrupted requests from a table does not remove their
-congestion effects. An ideal-recovery run retains completed-iteration progress;
-it does not eliminate all interruption overhead or capacity loss. Default
+congestion effects. The `restart` option retries interrupted requests from the beginning. The
+`ideal` option resumes completed progress on the next worker, assuming that
+progress is available without modelling the cost of saving or transferring it.
+An unfinished iteration is still lost, and both options still include retry
+waiting and lost serving capacity. The report displays these explanations
+rather than the configuration names alone. Default
 profiles do not establish calibration to Polaris or Qwen.

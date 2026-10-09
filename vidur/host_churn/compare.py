@@ -1,4 +1,4 @@
-"""Matched churn reports: python -m vidur.host_churn.compare --help."""
+"""Compare host-removal experiments: python -m vidur.host_churn.compare --help."""
 
 import argparse
 import json
@@ -85,16 +85,33 @@ def event_time(event):
     return event.get("time_s", event.get("time"))
 
 
+def recovery_label(mode):
+    return {
+        "restart": "Retry interrupted requests from the beginning",
+        "ideal": "Resume interrupted requests from completed progress (ideal)",
+    }.get(mode, "Recovery behaviour not recorded")
+
+
+def comparison_time_label(metadata, cutoff):
+    is_removal = any(
+        e.get("action") == "remove" and event_time(e) == cutoff
+        for m in metadata.values()
+        for e in m.get("events", [])
+    )
+    return "host removal" if is_removal else "comparison time"
+
+
 def report(runs, paths, metadata, baseline, cutoff):
     ids = list(runs[baseline])
     base = runs[baseline]
     union = {i for i in ids if any(interrupted(run[i]) for run in runs.values())}
-    text = ["# Host-churn comparison", "", "## Run index", ""]
+    time_label = comparison_time_label(metadata, cutoff)
+    text = ["# Host-removal experiment results", "", "## Run index", ""]
     index = []
     for name, path in paths.items():
         config = metadata[name].get("config", {})
         actions = [
-            f'{e["action"]} {e.get("host", "")} at {event_time(e):g}s'
+            f'{e.get("host", "Host")} {dict(remove="removed", start="starts initialising", ready="ready to serve")[e["action"]]} at {event_time(e):g}s'
             for e in metadata[name].get("events", [])
             if e.get("action") in ("remove", "start", "ready")
         ]
@@ -104,16 +121,35 @@ def report(runs, paths, metadata, baseline, cutoff):
         index.append(
             [
                 name,
-                "baseline" if name == baseline else mode,
-                "; ".join(actions) or "not recorded",
+                ("Baseline; " if name == baseline else "") + recovery_label(mode),
+                "; ".join(actions)
+                or (
+                    "No host changes"
+                    if "events" in metadata[name]
+                    else "Host events not recorded"
+                ),
                 str(path),
             ]
         )
     text += [
-        table(["Run", "Recovery / reference", "Host events", "Source"], index),
+        table(
+            [
+                "Run",
+                "How interrupted requests are retried",
+                "Host changes",
+                "Results file",
+            ],
+            index,
+        ),
         "",
-        f"Baseline: **{baseline}**. Arrival cutoff: **{cutoff:g} s**. "
+        f"Baseline: **{baseline}**. Time used to divide requests: **{cutoff:g} s** ({time_label}). "
         f"All runs contain the same {len(ids):,} request IDs, arrival times and token lengths.",
+        "",
+        "The simulator has two recovery options. **Retry from the beginning** discards "
+        "the interrupted request’s completed progress. **Resume completed progress (ideal)** "
+        "assumes that progress is available on the next worker, without modelling the cost "
+        "of saving or transferring it. Work from an unfinished iteration is still lost. "
+        "Both options still wait for a retry and share the remaining serving capacity.",
         "",
         "## Overall results",
         "",
@@ -143,32 +179,42 @@ def report(runs, paths, metadata, baseline, cutoff):
         table(
             [
                 "Run",
-                "Completed",
+                "Completed / total",
                 "Mean latency (s)",
-                "p95 (s)",
-                "Mean summed attempt queue (s)",
+                "p95 latency (s)",
+                "Mean worker wait (s)",
                 "Interrupted requests",
                 "Interrupted attempts",
             ],
             results,
         ),
         "",
-        "Latency and queue means above use completed requests only. Queue time is the sum "
-        "of recorded worker waits before the first execution of each attempt; it excludes "
-        "retry delay, global waiting and waits between iterations.",
+        "Latency runs from the scheduled arrival to final completion, including retries. "
+        "Means above use completed requests only. One request can be interrupted more than "
+        "once; interrupted attempts counts each interruption separately. Worker wait adds "
+        "up the time waiting on a worker before each attempt first executes. It excludes "
+        "retry delay, waiting before dispatch to a worker, and waits between iterations.",
         "",
-        "## Matched comparisons against baseline",
+        f"## Before and after {time_label}",
         "",
-        "Each row below uses only requests completed in both that run and the baseline. "
-        "Δ is run minus baseline; positive means slower. The paired count can differ by run.",
+        "Each comparison uses the same request IDs in that run and the baseline, "
+        "including only requests completed in both runs. Requests are grouped by scheduled "
+        "arrival time. Extra latency is the run mean minus the baseline mean; positive "
+        "means slower. Latency ratio is run mean divided by baseline mean (2× means twice as long).",
         "",
     ]
     cohorts = [
         ("All requests", ids),
-        ("Before cutoff", [i for i in ids if base[i]["arrived_at"] < cutoff]),
-        ("At / after cutoff", [i for i in ids if base[i]["arrived_at"] >= cutoff]),
         (
-            "At / after cutoff, never interrupted in any run",
+            f"Arrived before {time_label}",
+            [i for i in ids if base[i]["arrived_at"] < cutoff],
+        ),
+        (
+            f"Arrived at or after {time_label}",
+            [i for i in ids if base[i]["arrived_at"] >= cutoff],
+        ),
+        (
+            f"Arrived at or after {time_label}; not interrupted in any run",
             [i for i in ids if base[i]["arrived_at"] >= cutoff and i not in union],
         ),
     ]
@@ -180,23 +226,23 @@ def report(runs, paths, metadata, baseline, cutoff):
     text += [
         table(
             [
-                "Cohort",
+                "Request group",
                 "Run",
-                "Selected",
-                "Completed in both",
-                "Run mean (s)",
-                "Baseline mean (s)",
-                "Mean Δ (s)",
-                "Ratio",
+                "Requests",
+                "Completed in both runs",
+                "Mean latency (s)",
+                "Baseline latency (s)",
+                "Extra latency (s)",
+                "Latency ratio",
             ],
             rows,
         ),
         "",
-        "The never-interrupted cohort shows whether slowdown reaches requests that were "
-        "not directly interrupted. Their latency can still include congestion caused by retries; "
-        "excluding them does not remove retry effects from the system.",
+        "The last group contains requests that were not interrupted in any run. A slowdown "
+        "here shows that later requests are also affected. They can still wait behind retried "
+        "requests, so this group does not isolate the effect of losing capacity.",
         "",
-        "## Requests interrupted in each run",
+        "## Interrupted requests",
         "",
     ]
     rows = []
@@ -210,18 +256,19 @@ def report(runs, paths, metadata, baseline, cutoff):
             [
                 "Run",
                 "Interrupted requests",
-                "Completed in both",
-                "Run mean (s)",
-                "Baseline mean (s)",
-                "Mean Δ (s)",
-                "Ratio",
+                "Completed in both runs",
+                "Mean latency (s)",
+                "Baseline latency (s)",
+                "Extra latency (s)",
+                "Latency ratio",
             ],
             rows,
         ),
         "",
-        "These cohorts include all arrival times: a request can arrive before removal and "
-        "still be interrupted. Each run may interrupt different IDs, so these rows are not "
-        "a direct restart-versus-ideal comparison.",
+        "For each run, this table compares its interrupted requests with those same "
+        "requests in the baseline. A request can arrive before host removal and still be "
+        "interrupted. Different runs may interrupt different requests, so these rows do "
+        "not directly compare the two ways of retrying them.",
         "",
     ]
     restarts = [
@@ -243,7 +290,10 @@ def report(runs, paths, metadata, baseline, cutoff):
         == "ideal"
     ]
     if restarts and ideals:
-        text += ["## Restart versus ideal recovery", ""]
+        text += [
+            "## Retrying from the beginning versus resuming completed progress",
+            "",
+        ]
         rows = []
         for restart in restarts:
             for ideal in ideals:
@@ -266,32 +316,35 @@ def report(runs, paths, metadata, baseline, cutoff):
         text += [
             table(
                 [
-                    "Pair",
-                    "Cohort",
-                    "Selected",
-                    "Completed in both",
-                    "Restart mean (s)",
-                    "Ideal mean (s)",
-                    "Restart − ideal (s)",
-                    "Ratio",
+                    "Runs compared",
+                    "Request group",
+                    "Requests",
+                    "Completed in both runs",
+                    "Retry from beginning: mean (s)",
+                    "Resume progress: mean (s)",
+                    "Extra latency from restarting (s)",
+                    "Latency ratio",
                 ],
                 rows,
             ),
             "",
-            "Interpret this as a recovery-mode comparison only when both runs use the same "
-            "host schedule, workload, hardware and scheduler settings. Ideal recovery preserves "
-            "completed-iteration progress, but still includes capacity loss, interrupted-iteration "
-            "loss and retry waiting. Changes in queueing are part of the difference; this is "
-            "not an exact causal decomposition.",
+            "The first run in each pair retries from the beginning; the second resumes "
+            "completed progress. Both columns use the same requests. A positive difference "
+            "means retrying from the beginning took longer. Interpret this as the effect of "
+            "the recovery option only if host changes, hardware and scheduler settings are "
+            "also the same. The difference includes any resulting changes in queueing; it "
+            "does not separate the total slowdown exactly into capacity loss and retry cost.",
             "",
         ]
     text += [
-        "## Interpretation limits",
+        "## What these results can tell us",
         "",
-        "This report validates workload matching, not calibration or all simulator settings. "
-        "Runs using default model and hardware profiles are simulator checks, not measured "
-        "Polaris/Qwen results. A baseline-versus-removal difference combines capacity loss "
-        "and recovery effects. p95 uses linear interpolation.",
+        "The report checks that requests, arrival times and token lengths agree across runs. "
+        "It does not check all simulator settings or whether timing predictions match the real "
+        "system. Default profiles can test the simulator, but do not establish Polaris/Qwen "
+        "performance. Comparing host removal with the baseline includes both lost capacity "
+        "and interruption recovery. p95 is the latency below which 95% of completed requests "
+        "fall, calculated with linear interpolation.",
         "",
     ]
     return "\n".join(text)
@@ -349,7 +402,12 @@ def plots(runs, metadata, baseline, cutoff, bin_seconds, output):
             color=colors[j % len(colors)],
         )
     if cutoff > 0:
-        ax.axvline(cutoff, color="0.3", linestyle="--", label=f"Cutoff {cutoff:g}s")
+        ax.axvline(
+            cutoff,
+            color="0.3",
+            linestyle="--",
+            label=f"{comparison_time_label(metadata, cutoff).capitalize()} at {cutoff:g}s",
+        )
     # Mark each distinct observed removal / ready event once.
     events = {
         (e["action"], event_time(e))
@@ -364,12 +422,12 @@ def plots(runs, metadata, baseline, cutoff, bin_seconds, output):
             time,
             color="0.6",
             linestyle=":" if action == "ready" else "--",
-            label=f"{action} {time:g}s",
+            label=f'{"Host removed" if action == "remove" else "Host ready to serve"} at {time:g}s',
         )
     ax.set(
         xlabel="Scheduled arrival time (s)",
         ylabel="Mean latency (s)",
-        title=f"Matched arrival bins ({bin_seconds:g}s); completed in every run",
+        title=f"Mean latency for requests arriving in each {bin_seconds:g}s interval",
     )
     ax.legend(ncol=3)
     fig.tight_layout()
@@ -393,7 +451,9 @@ def main():
         "--baseline", help="Baseline run ID (default: first supplied run)"
     )
     parser.add_argument(
-        "--after", type=float, help="Arrival cutoff; default: first recorded removal"
+        "--after",
+        type=float,
+        help="Divide requests by scheduled arrival time; defaults to the first recorded host removal",
     )
     parser.add_argument("--output-dir", type=Path, default=Path("churn_comparison"))
     parser.add_argument("--bin-seconds", type=float, default=10)
@@ -458,7 +518,7 @@ def main():
             or args.bin_seconds <= 0
         ):
             raise ValueError(
-                "cutoff must be finite and nonnegative; bin size must be finite and positive"
+                "comparison time must be finite and nonnegative; interval length must be finite and positive"
             )
         result = report(runs, paths, metadata, baseline, cutoff)
         args.output_dir.mkdir(parents=True, exist_ok=True)
@@ -471,10 +531,11 @@ def main():
                 print("Figures skipped: install matplotlib, or use --no-plots.")
             else:
                 result += (
-                    "\n## Figures\n\n![Matched latency summary](latency_summary.png)\n\n"
+                    "\n## Figures\n\n![Latency of the same requests in each run](latency_summary.png)\n\n"
                     "![Latency by scheduled arrival](latency_over_time.png)\n\n"
-                    "Figures use requests completed in every run. Arrival bins contain the same IDs "
-                    "for all curves; they are not instantaneous queue measurements.\n"
+                    "Both figures use the same requests, completed in every run. Each point in the "
+                    "time plot is the mean latency of requests scheduled to arrive in that interval; "
+                    "it does not show the queue length at that moment. Run IDs are explained in the run index.\n"
                 )
         (args.output_dir / "report.md").write_text(result)
         print(result)

@@ -44,7 +44,8 @@ def test_matched_arrival_cohort(tmp_path, monkeypatch, capsys):
     output = capsys.readouterr().out
     assert "Run index" in output
     assert (
-        "| At / after cutoff | R02 | 1 | 1 | 3.000 | 3.000 | 0.000 | 1.00× |" in output
+        "| Arrived at or after comparison time | R02 | 1 | 1 | 3.000 | 3.000 | 0.000 | 1.00× |"
+        in output
     )
 
 
@@ -113,16 +114,31 @@ def test_report_pairing_and_discovery(tmp_path, monkeypatch, capsys):
     )
     main()
     report = (out / "report.md").read_text()
-    assert "Arrival cutoff: **1 s**" in report
+    assert "Time used to divide requests: **1 s**" in report
     assert (
-        "| At / after cutoff | R02 | 3 | 2 | 8.500 | 2.500 | 6.000 | 3.40× |" in report
+        "| Arrived at or after host removal | R02 | 3 | 2 | 8.500 | 2.500 | 6.000 | 3.40× |"
+        in report
     )
     assert (
         "| R02 vs R03 | Interrupted in either run | 1 | 1 | 5.000 | 3.000 | 2.000 | 1.67× |"
         in report
     )
     assert "| R02 | 1 | 1 | 5.000 | 1.000 | 4.000 | 5.00× |" in report
-    assert "not an exact causal decomposition" in report
+    assert "does not separate the total slowdown exactly" in report
+    assert "Retry interrupted requests from the beginning" in report
+    assert "Resume interrupted requests from completed progress (ideal)" in report
+    assert "h0 removed at 1s" in report
+    assert "Completed in both runs" in report
+    assert "Extra latency (s)" in report
+    for old in (
+        "Matched",
+        "Selected",
+        "Cohort",
+        "Mean Δ",
+        "Restart versus ideal",
+        "Arrival cutoff",
+    ):
+        assert old not in report
 
 
 def test_duplicate_request_rejected(tmp_path):
