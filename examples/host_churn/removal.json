@@ -1,0 +1,10 @@
+{
+  "workers_per_host": 4,
+  "recovery": "restart",
+  "detection_delay_s": 0.05,
+  "retry_delay_s": 0.001,
+  "events": [
+    {"time_s": 90.72, "action": "remove", "host": "h0"},
+    {"time_s": 150, "action": "start", "host": "h0", "startup_delay_s": 30}
+  ]
+}

@@ -45,7 +45,14 @@ class Simulator:
             self._cluster.replicas,
         )
 
+        self._churn = None
+        if config.host_churn_file:
+            from vidur.host_churn.controller import HostChurn
+
+            self._churn = HostChurn(self, config.host_churn_file)
         self._init_event_queue()
+        if self._churn:
+            self._add_events(self._churn.initial_events())
         atexit.register(self._write_output)
 
     @property
@@ -63,8 +70,14 @@ class Simulator:
 
         while self._event_queue and not self._terminate:
             _, event = heapq.heappop(self._event_queue)
+            if self._churn and not self._churn.valid(event):
+                continue
             self._set_time(event._time)
+            if self._terminate and self._churn:
+                break
             new_events = event.handle_event(self._scheduler, self._metric_store)
+            if self._churn:
+                self._churn.after_event(event)
             self._add_events(new_events)
 
             if self._config.metrics_config.write_json_trace:
@@ -75,6 +88,12 @@ class Simulator:
                 if chrome_trace:
                     self._event_chrome_trace.append(chrome_trace)
 
+        if self._churn:
+            self._churn.write_output()
+            if not self._scheduler.is_empty() and not self._terminate:
+                raise RuntimeError(
+                    "Unfinished requests: schedule ended without enough ready capacity"
+                )
         assert self._scheduler.is_empty() or self._terminate
 
         logger.info(f"Simulation ended at: {self._time}s")
@@ -94,6 +113,8 @@ class Simulator:
             logger.info("Chrome event trace written")
 
     def _add_event(self, event: BaseEvent) -> None:
+        if self._churn:
+            self._churn.stamp(event)
         heapq.heappush(self._event_queue, (event._priority_number, event))
 
     def _add_events(self, events: List[BaseEvent]) -> None:

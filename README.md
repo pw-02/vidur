@@ -166,3 +166,9 @@ trademarks or logos is subject to and must follow
 Use of Microsoft trademarks or logos in modified versions of this project must not cause confusion or imply Microsoft sponsorship.
 Any use of third-party trademarks or logos are subject to those third-party's policies.
 
+
+## Controlled host churn (MalleServe extension)
+
+Optional host schedules, cancellation, original-request retries and ideal progress
+recovery diagnostics are documented in [docs/host_churn.md](docs/host_churn.md).
+Workers per host and explicit host membership are configurable.

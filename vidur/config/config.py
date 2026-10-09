@@ -625,6 +625,9 @@ class ClusterConfig:
 
 @dataclass
 class SimulationConfig(ABC):
+    host_churn_file: str = field(
+        default="", metadata={"help": "Optional JSON host-churn schedule."}
+    )
     seed: int = field(
         default=42,
         metadata={"help": "Seed for the random number generator."},

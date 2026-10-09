@@ -24,7 +24,8 @@ class SarathiReplicaScheduler(BaseReplicaScheduler):
         if request.id not in self._allocation_map:
             # new request
             num_required_blocks = ceil(
-                request.num_prefill_tokens / self._config.block_size
+                max(request.num_prefill_tokens, request.num_processed_tokens)
+                / self._config.block_size
             )
             return (
                 self._config.num_blocks
@@ -40,7 +41,8 @@ class SarathiReplicaScheduler(BaseReplicaScheduler):
         if request.id not in self._allocation_map:
             # new request
             num_required_blocks = ceil(
-                request.num_prefill_tokens / self._config.block_size
+                max(request.num_prefill_tokens, request.num_processed_tokens)
+                / self._config.block_size
             )
             self.allocate(request.id, num_required_blocks)
             return

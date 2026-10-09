@@ -24,6 +24,7 @@ class BatchEndEvent(BaseEvent):
 
         self._batch.on_batch_end(self.time)
         replica_scheduler = scheduler.get_replica_scheduler(self._replica_id)
+        replica_scheduler._active_batches.pop(self._batch.id, None)
         replica_scheduler.on_batch_end(self._batch)
 
         memory_usage_percent = replica_scheduler.memory_usage_percent

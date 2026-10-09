@@ -17,6 +17,7 @@ class ReplicaStageScheduler:
         self._is_last_stage = is_last_stage
         self._execution_time_predictor = execution_time_predictor
 
+        self._active_stage = None
         self._batch_queue = []
         self._is_busy = False
 
@@ -32,6 +33,7 @@ class ReplicaStageScheduler:
 
     def on_stage_end(self) -> None:
         self._is_busy = False
+        self._active_stage = None
 
     def on_schedule(self) -> Tuple[Batch, BatchStage, ExecutionTime]:
         if self._is_busy or not self._batch_queue:
@@ -55,4 +57,5 @@ class ReplicaStageScheduler:
             batch.num_tokens,
         )
 
+        self._active_stage = batch_stage
         return batch, batch_stage, execution_time

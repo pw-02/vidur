@@ -35,10 +35,13 @@ class Request(BaseEntity):
     ):
         self._id = Request.generate_id()
         self._arrived_at = arrived_at
+        self._original_prefill_tokens = num_prefill_tokens
+        self._original_decode_tokens = num_decode_tokens
         self._num_prefill_tokens = num_prefill_tokens
         self._num_decode_tokens = num_decode_tokens
         self._num_processed_tokens = num_processed_tokens
 
+        self._has_been_scheduled = False
         self._scheduled_at = 0
         self._execution_time = 0
         self._model_execution_time = 0
@@ -211,10 +214,11 @@ class Request(BaseEntity):
         if self._scheduled:
             return
 
-        if self._num_restarts > 0:
+        if self._has_been_scheduled:
             self._scheduled = True
             return
 
+        self._has_been_scheduled = True
         self._scheduled_at = time
         self._scheduling_delay = time - self._arrived_at
         self._scheduled = True
@@ -290,6 +294,20 @@ class Request(BaseEntity):
             "latest_iteration_completed_at": self._latest_iteration_completed_at,
             "num_restarts": self._num_restarts,
         }
+
+    def retry_after_host_loss(self, preserve_progress=False):
+        """Reset an attempt; ideal recovery preserves completed iterations only."""
+        processed = self._num_processed_tokens if preserve_progress else 0
+        if not preserve_progress:
+            self._num_prefill_tokens = self._original_prefill_tokens
+            self._num_decode_tokens = self._original_decode_tokens
+        self._num_processed_tokens = processed
+        self._is_prefill_complete = processed >= self._num_prefill_tokens
+        self._completed = False
+        self._completed_at = 0
+        self._scheduled = False
+        self._preempted = False
+        self._num_restarts += 1
 
     def restart(self):
         logger.debug(f"Restarting request {self._id}")

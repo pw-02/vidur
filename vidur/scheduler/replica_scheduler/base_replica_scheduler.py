@@ -50,6 +50,7 @@ class BaseReplicaScheduler(ABC):
             f"Obtained max batch size of {self._max_batch_size} for replica {self._replica_id}"
         )
 
+        self._active_batches = {}
         self._request_queue = []
         self._num_allocated_blocks = 0
         self._allocation_map = {}
@@ -96,7 +97,7 @@ class BaseReplicaScheduler(ABC):
         if request.is_prefill_complete:
             return 1
 
-        return request.num_prefill_tokens
+        return request.num_prefill_tokens - request.num_processed_tokens
 
     def add_request(self, request: Request) -> None:
         self._request_queue.append(request)
@@ -140,6 +141,7 @@ class BaseReplicaScheduler(ABC):
             batch = self._get_next_batch()
             if not batch:
                 break
+            self._active_batches[batch.id] = batch
             scheduled_batches.append(batch)
             self._num_running_batches += 1
         return scheduled_batches
