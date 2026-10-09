@@ -132,3 +132,43 @@ is retained as a mapping; Vidur uses numeric request IDs in CSV row order.
 
 See [adding_models_current.md](adding_models_current.md) for the current model and
 profiling path, and [qwen3_profiling.md](qwen3_profiling.md) for Qwen3 profiling and CSV import.
+
+### Comparison report and figures
+
+From the repository root, run:
+
+```bash
+python -m vidur.host_churn.compare
+```
+
+This selects the latest timestamped subfolder under each of
+`simulator_output/baseline`, `simulator_output/removal`, and
+`simulator_output/ideal`, assigning R01, R02, and R03 respectively. It prints
+and saves `churn_comparison/report.md`, plus two PNG figures when Matplotlib
+is installed. No Chrome or Kaleido is required. Check the run index when using
+latest-run discovery; it does not guarantee the selected runs used identical
+settings. Use explicit selections for reproducible comparisons:
+
+```bash
+python -m vidur.host_churn.compare --runs \
+  R01=simulator_output/baseline/<timestamp> \
+  R02=simulator_output/removal/<timestamp> \
+  R03=simulator_output/ideal/<timestamp> \
+  --baseline R01 --after 90.72 --output-dir churn_comparison
+```
+
+Positional `R01=path` arguments also work. Paths may be run folders or JSONL
+files. The cutoff defaults to the earliest observed removal in a non-baseline
+run (zero if no summary records a removal); use `--after` to override it.
+Use `--root` for a different discovery root, `--bin-seconds 10` for arrival
+bins, or `--no-plots` for a standard-library-only report.
+
+The report includes completion counts, mean/p95 latency, summed worker wait
+per request, matched pre/post-cutoff comparisons, a common never-interrupted
+cohort, each run's interrupted cohort, and paired restart-versus-ideal results.
+Paired tables only include requests completed in both compared runs. Figures
+use a common cohort completed in every run, and short IDs resolve through the
+run index. Removing interrupted requests from a table does not remove their
+congestion effects. An ideal-recovery run retains completed-iteration progress;
+it does not eliminate all interruption overhead or capacity loss. Default
+profiles do not establish calibration to Polaris or Qwen.
