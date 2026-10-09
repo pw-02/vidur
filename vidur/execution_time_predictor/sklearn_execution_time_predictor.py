@@ -104,6 +104,19 @@ class SklearnExecutionTimePredictor(BaseExecutionTimePredictor):
 
     def _load_compute_df(self, file_path: str) -> pd.DataFrame:
         df = self._read_input_file(file_path)
+        if self._model_config.use_qk_norm:
+            if (
+                "qk_norm_in_attn_rope" not in df
+                or not df["qk_norm_in_attn_rope"].eq(True).all()
+            ):
+                raise ValueError(
+                    "Qwen3 compute profiles must include Q/K normalization; rerun this fork profiling scripts"
+                )
+            if (
+                "dtype" not in df
+                or not df["dtype"].eq(self._model_config.dtype_name).all()
+            ):
+                raise ValueError("Compute profile dtype does not match the model")
         df = df.drop_duplicates()
 
         logger.debug(f"Length of complete compute df: {len(df)} {file_path}")
@@ -142,6 +155,10 @@ class SklearnExecutionTimePredictor(BaseExecutionTimePredictor):
 
     def _load_attention_df(self, file_path: str) -> pd.DataFrame:
         df = pd.read_csv(file_path)
+        if self._model_config.use_qk_norm and (
+            "dtype" not in df or not df["dtype"].eq(self._model_config.dtype_name).all()
+        ):
+            raise ValueError("Qwen3 attention profile dtype does not match the model")
         df = df.drop_duplicates()
 
         for column in [
@@ -197,8 +214,7 @@ class SklearnExecutionTimePredictor(BaseExecutionTimePredictor):
 
     def _read_input_file(self, file_path: str) -> pd.DataFrame:
         df = pd.read_csv(file_path)
-        df = df.drop_duplicates()
-        return df
+        return df.drop_duplicates()
 
     def _get_compute_df_with_derived_features(self, df: pd.DataFrame) -> pd.DataFrame:
         df_with_derived_features = df.copy()

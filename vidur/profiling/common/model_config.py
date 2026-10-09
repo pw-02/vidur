@@ -30,7 +30,15 @@ class ModelConfig:
         rope_scaling: Optional[Dict[str, Any]] = None,
         partial_rotary_factor: float = 1.0,
         no_tensor_parallel: bool = False,
+        use_qk_norm: bool = False,
+        norm_eps: float = 1e-6,
+        dtype_name: str = "float16",
     ):
+        self.use_qk_norm = use_qk_norm
+        self.norm_eps = norm_eps
+        if dtype_name not in {"float16", "bfloat16"}:
+            raise ValueError("Profiling supports float16 or bfloat16")
+        self.dtype_name = dtype_name
         self.name = name
         self.num_layers = num_layers
         self.num_q_heads = num_q_heads
@@ -77,4 +85,4 @@ class ModelConfig:
 
     @property
     def dtype(self):
-        return torch.float16
+        return getattr(torch, self.dtype_name)

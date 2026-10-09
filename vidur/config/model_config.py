@@ -28,6 +28,9 @@ class BaseModelConfig(BaseFixedConfig):
     rope_scaling: Optional[Dict[str, Any]] = None
     partial_rotary_factor: float = 1.0
     no_tensor_parallel: bool = False
+    use_qk_norm: bool = False
+    norm_eps: float = 1e-6
+    dtype_name: str = "float16"
 
 
 @dataclass
@@ -45,6 +48,9 @@ class Llama2ModelConfig(BaseModelConfig):
     rope_scaling: Optional[Dict[str, Any]] = None
     partial_rotary_factor: float = 1.0
     no_tensor_parallel: bool = False
+    use_qk_norm: bool = False
+    norm_eps: float = 1e-6
+    dtype_name: str = "float16"
 
     @staticmethod
     def get_name():
@@ -212,3 +218,46 @@ class Qwen72BModelConfig(QwenModelConfig):
     @staticmethod
     def get_name():
         return "Qwen/Qwen-72B"
+
+
+@dataclass
+class Qwen3ModelConfig(Llama2ModelConfig):
+    """Dense Qwen3 family; Q/K normalization is profiled with RoPE."""
+
+    max_position_embeddings: int = 40960
+    vocab_size: int = 151936
+    rope_theta: Optional[float] = 1000000
+    use_qkv_bias: bool = False
+    use_qk_norm: bool = True
+    norm_eps: float = 1e-6
+    dtype_name: str = "bfloat16"
+
+    @staticmethod
+    def get_name():
+        return "Qwen/Qwen3-Config"
+
+
+@dataclass
+class Qwen3_8BModelConfig(Qwen3ModelConfig):
+    num_kv_heads: int = 8
+    num_layers: int = 36
+    num_q_heads: int = 32
+    embedding_dim: int = 4096
+    mlp_hidden_dim: int = 12288
+
+    @staticmethod
+    def get_name():
+        return "Qwen/Qwen3-8B"
+
+
+@dataclass
+class Qwen3_14BModelConfig(Qwen3ModelConfig):
+    num_kv_heads: int = 8
+    num_layers: int = 40
+    num_q_heads: int = 40
+    embedding_dim: int = 5120
+    mlp_hidden_dim: int = 17408
+
+    @staticmethod
+    def get_name():
+        return "Qwen/Qwen3-14B"

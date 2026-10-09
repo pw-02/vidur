@@ -12,6 +12,7 @@ from sarathi.model_executor.parallel_utils.tensor_parallel.layers import (
 
 from vidur.profiling.common.cuda_timer import CudaTimer
 from vidur.profiling.common.model_config import ModelConfig
+from vidur.profiling.qk_norm import normalize_attention_heads
 
 REUSE_MEMORY = True
 
@@ -61,12 +62,23 @@ class CausalSelfAttention(torch.nn.Module):
                 is_neox_style=config.is_neox_style,
                 rope_scaling=config.rope_scaling,
             )
+        self.q_norm = (
+            RMSNorm(self.head_dim, eps=config.norm_eps) if config.use_qk_norm else None
+        )
+        self.k_norm = (
+            RMSNorm(self.head_dim, eps=config.norm_eps) if config.use_qk_norm else None
+        )
+        # Existing CSV/predictor field measures Q/K normalization + RoPE for Qwen3.
         self._attn_rope_timer = CudaTimer("attn_rope")
 
     def forward(self, hidden_states, positions):
         qkv, _ = self.qkv_proj(hidden_states)
         q, k, v = qkv.split([self.q_size, self.kv_size, self.kv_size], dim=-1)
         with self._attn_rope_timer:
+            if self.q_norm is not None:
+                q, k = normalize_attention_heads(
+                    q, k, self.head_dim, self.q_norm, self.k_norm
+                )
             q, k = self.rotary_emb(positions, q, k)
         # output from attn has the same shape as q
         attn_output = torch.randn_like(q)

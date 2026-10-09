@@ -68,6 +68,9 @@ class ParamCounter:
                 // self._replica_config.tensor_parallel_size
             )
 
+        if self._model_config.use_qk_norm:
+            # Two shared per-head RMSNorm scales, replicated on TP workers.
+            num_parameters += 2 * self._attention_head_dim
         return num_parameters
 
     def get_num_parameters_per_device(self) -> int:

@@ -29,8 +29,8 @@ no `data/model_configs` directory. The following describes the current code.
      --max_model_len 33000 --max_seq_len 33000
    ```
 
-   These are instructions for after model support has been implemented, not
-   commands that work on the current fork as-is. Check profiler memory limits and
+   The fork now includes Qwen3 model/operator support. These commands require
+   the separate GPU profiling dependencies and still need a GPU smoke run. Check profiler memory limits and
    its batching ranges; a complete 33k sweep can be expensive.
 4. Place generated `mlp.csv` and `attention.csv` under
    `data/profiling/compute/<device>/<model-id>/`. Select the model and device with
@@ -54,12 +54,11 @@ intermediate dimension, 32 Q heads, 8 KV heads, head dimension 128, vocabulary
 151936, RoPE theta 1000000 and maximum positions 40960. It has no attention bias.
 Check the exact checkpoint you use rather than assuming all Qwen generations match.
 
-Qwen3 also normalizes Q and K per head. Vidur's current reference attention
-projection code does not explicitly include those Q/K normalization operations.
-A faithful extension must account for their timing (and parameter memory where
-relevant), or label the model as an approximation and validate the error. The
-existing `Qwen/Qwen-72B` class represents an older model, not Qwen3-8B. No Qwen3
-class or timing profiles are added by the request converter.
+Qwen3 also normalizes Q and K per head. This fork now registers both Qwen3-8B
+and Qwen3-14B and includes those operations in the combined Q/K-normalization-plus-
+RoPE profiling time. Profilers use BF16 for these models. GPU timings still need
+to be collected and validated. See [qwen3_profiling.md](qwen3_profiling.md) for the
+runnable profiling script, CSV import procedure and validation limits.
 
 Primary references:
 - https://huggingface.co/Qwen/Qwen3-8B/blob/main/config.json

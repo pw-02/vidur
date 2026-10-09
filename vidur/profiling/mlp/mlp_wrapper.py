@@ -50,7 +50,7 @@ class MlpWrapper:
             ),
         )
         initialize_dummy_weights(self.model)
-        self.model = self.model.to(dtype=torch.float16).cuda().eval()
+        self.model = self.model.to(dtype=model_config.dtype).cuda().eval()
 
     @torch.inference_mode()
     def profile(self, num_tokens: int):
@@ -114,6 +114,9 @@ class MlpWrapper:
             "n_expanded_embd": self.model_config.mlp_hidden_dim,
             "vocab_size": self.model_config.vocab_size,
             "use_gated_mlp": self.model_config.use_gated_mlp,
+            "use_qk_norm": self.model_config.use_qk_norm,
+            "dtype": self.model_config.dtype_name,
+            "qk_norm_in_attn_rope": self.model_config.use_qk_norm,
             "num_tokens": num_tokens,
             "num_tensor_parallel_workers": self.num_tensor_parallel_workers,
         }

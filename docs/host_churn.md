@@ -131,4 +131,4 @@ set the trace limit and predictor ranges accordingly. The extra `request_id` col
 is retained as a mapping; Vidur uses numeric request IDs in CSV row order.
 
 See [adding_models_current.md](adding_models_current.md) for the current model and
-profiling path, including the remaining Qwen3 architecture work.
+profiling path, and [qwen3_profiling.md](qwen3_profiling.md) for Qwen3 profiling and CSV import.

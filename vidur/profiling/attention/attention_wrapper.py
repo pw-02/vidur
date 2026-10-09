@@ -142,6 +142,7 @@ class AttentionWrapper:
         return {
             "time_stats": self.time_stats_store.get_stats(),
             "n_embd": self._model_config.embedding_dim,
+            "dtype": self._model_config.dtype_name,
             "n_q_head": self._model_config.num_q_heads,
             "n_kv_head": self._model_config.num_kv_heads,
             "block_size": self._block_size,

@@ -179,7 +179,6 @@ def profile_model(
 def main():
     args = parse_args()
 
-    dtype = torch.float16
     input_combinations = get_attention_input_combinations(
         args.max_seq_len,
         args.min_batch_size,
@@ -192,6 +191,7 @@ def main():
     max_num_blocks_dict = {}
     for model in args.models:
         model_config = ModelConfig.from_model_name(model)
+        dtype = model_config.dtype
         for num_tensor_parallel_workers in args.num_tensor_parallel_workers:
             max_num_blocks = get_max_num_blocks(
                 model_config,
@@ -215,6 +215,7 @@ def main():
     pbar = tqdm(total=sum(len(v) for v in total_combos.values()))
 
     for model in args.models:
+        dtype = ModelConfig.from_model_name(model).dtype
         result_df = pd.DataFrame()
         for num_tensor_parallel_workers in args.num_tensor_parallel_workers:
             result_df = pd.concat(
