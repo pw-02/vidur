@@ -112,3 +112,23 @@ replicas; multi-worker pipeline host failure is not implemented. This extension
 adds no LMCache persistence, prefix prefetching or failure-aware routing policy.
 Tests use real Vidur events/schedulers and deterministic timing, so they validate
 lifecycle semantics rather than the accuracy of hardware performance predictions.
+
+## Convert MalleServe request summaries
+
+```bash
+python -m vidur.host_churn.convert_requests /path/to/requests.jsonl workload.csv
+```
+
+This small standard-library-only converter preserves scheduled arrival offsets,
+orders ties by trace index, prefers actual input-token counts and falls back to
+recorded input tokens. It uses requested output tokens by default, includes failed
+logical requests, ignores warmup records and rejects duplicate request IDs instead
+of counting attempts as new arrivals. Rows without phase are treated as replay.
+`--decode actual` explicitly uses measured output length; that requires an actual
+completion count for every row. Convert one reference run and reuse its CSV across
+simulated scenarios. The printed required token limit includes prompt plus output;
+set the trace limit and predictor ranges accordingly. The extra `request_id` column
+is retained as a mapping; Vidur uses numeric request IDs in CSV row order.
+
+See [adding_models_current.md](adding_models_current.md) for the current model and
+profiling path, including the remaining Qwen3 architecture work.
